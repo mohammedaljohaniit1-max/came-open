@@ -116,6 +116,17 @@ async def stats(country_code: str = Query("SA")):
     return await db.get_stats(country_code if country_code != "GLOBAL" else None)
 
 
+@router.get("/exposure/{country_code}")
+async def exposure(country_code: str):
+    """
+    Real camera-exposure intelligence for a country from Shodan's credit-free
+    /count facets (total exposed devices, by product/port/city/ISP). Proves the
+    true attack surface even where individual feeds are auth-locked.
+    """
+    from ..services import shodan_discovery
+    return await shodan_discovery.country_stats(country_code.upper())
+
+
 async def _extract_jpeg(url: str, timeout: float = 8.0) -> Optional[bytes]:
     """Fetch one JPEG frame from a direct image OR a multipart MJPEG stream."""
     async with httpx.AsyncClient(verify=False, timeout=timeout,

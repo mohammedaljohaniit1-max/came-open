@@ -33,6 +33,7 @@ from ..core.config import settings
 from ..core.knowledge import ARCHITECTURE_BY_ID
 from ..engines import osint_crawler
 from . import geoip
+from . import shodan_discovery
 
 
 def _vendor_from_feed(feed_url: str) -> str:
@@ -94,6 +95,100 @@ async def fetch_osint_cameras(country_codes: List[str], per_country: int = 40,
             "meta_name": f"{g.get('city') or 'Camera'} · {r['ip']}",
         })
     return out
+
+
+async def fetch_shodan_country(country_code: str, max_ips: int = 100) -> List[Dict]:
+    """
+    Country-aware OSINT discovery via Shodan's credit-free count+facets endpoint.
+
+    Used for regions the curated indexes miss (e.g. Saudi Arabia). Discovers real
+    exposed camera IPs, resolves their open ports (keyless InternetDB), builds
+    candidate HTTP snapshot/MJPEG feed URLs, and geolocates each IP. The scan
+    pipeline then render-verifies every candidate, so only cameras that actually
+    serve a live frame are displayed; the rest are kept as classified nodes.
+    """
+    import asyncio as _asyncio
+    import httpx as _httpx
+    from ..engines.validator import find_working_feed
+
+    disc = await shodan_discovery.discover_country(country_code, max_ips=max_ips)
+    ips = disc["ips"]
+    if not ips:
+        return []
+
+    geo = await geoip.geolocate(ips)
+    port_map = disc["port_map"]
+    sem = _asyncio.Semaphore(30)
+
+    async def _classify(ip: str):
+        """Return (ip, working_feed_or_None, http_tier) for a discovered IP.
+
+        http_tier: 'open' (200 + renders), 'locked' (401/403), 'ui' (200 web UI
+        but no direct frame), or None (no HTTP)."""
+        async with sem:
+            idb = port_map.get(ip, {})
+            ports = idb.get("ports", [])
+            web_ports = [p for p in ports if 80 <= p <= 9100]
+            # 1) try to find a directly-rendering open feed
+            fw = await find_working_feed(ip, ports)
+            if fw:
+                return ip, fw, "open"
+            # 2) otherwise probe the web UI to classify auth tier
+            for port in web_ports[:2]:
+                try:
+                    async with _httpx.AsyncClient(timeout=4.0, verify=False,
+                                                  follow_redirects=True) as c:
+                        r = await c.get(f"http://{ip}:{port}/",
+                                        headers={"User-Agent": "CAMRADAR/1.0"})
+                    if r.status_code in (401, 403):
+                        return ip, {"port": port}, "locked"
+                    if r.status_code == 200:
+                        return ip, {"port": port}, "ui"
+                except Exception:  # noqa: BLE001
+                    continue
+            return ip, None, None
+
+    classified = await _asyncio.gather(*[_classify(ip) for ip in ips])
+
+    out: List[Dict] = []
+    for ip, fw, tier in classified:
+        if tier is None:
+            continue  # no HTTP interface at all — skip (likely RTSP-only/dead)
+        g = geo.get(ip, {})
+        idb = port_map.get(ip, {})
+        all_ports = idb.get("ports", [])
+        vulns = idb.get("vulns", []) or []
+        port = fw.get("port") if fw else (all_ports[0] if all_ports else 80)
+
+        if tier == "open":
+            sec_tier, sec_code, renders = "open", "OPEN_ACCESS", True
+            feed = fw["feed_url"]; proto = fw["protocol"]
+        elif tier == "locked":
+            sec_tier, sec_code, renders = "locked", "AUTH_LOCKED", False
+            feed = None; proto = "HTTP (401)"
+        else:  # 'ui' — reachable web UI, treat as default-cred exposure candidate
+            sec_tier, sec_code, renders = "default_creds", "DEFAULT_CREDS_RISK", False
+            feed = None; proto = "HTTP"
+
+        cid = _stable_id("shodan", country_code, ip)
+        out.append({
+            "id": cid, "ip": ip, "port": port,
+            "country": g.get("country") or country_code,
+            "country_code": g.get("country_code") or country_code,
+            "city": g.get("city"), "isp": g.get("isp"), "org": g.get("org"),
+            "asn": g.get("asn"), "latitude": g.get("lat"), "longitude": g.get("lon"),
+            "vendor": "public_webcam",
+            "vendor_label": ARCHITECTURE_BY_ID["public_webcam"]["label"],
+            "protocol": proto, "source": "Shodan OSINT Discovery",
+            "stream_url": None, "snapshot_url": feed, "feed_url": feed,
+            "renders": renders,
+            "security_tier": sec_tier, "security_code": sec_code,
+            "http_status": 401 if tier == "locked" else 200,
+            "shodan_vulns": vulns, "shodan_ports": all_ports,
+            "meta_name": f"{g.get('city') or 'Camera'} · {ip}",
+        })
+    return out
+
 
 # --------------------------------------------------------------------------
 # Source endpoints
@@ -295,31 +390,46 @@ def load_seed_catalogue() -> List[Dict]:
 
 # --------------------------------------------------------------------------
 # Default OSINT crawl set — worldwide countries with the most indexed open
-# cameras (Saudi Arabia is intentionally absent from public indexes; see the
-# Saudi ASM note in the API/UI). Ordered by richness.
+# cameras in the curated index. Ordered by richness.
 OSINT_COUNTRIES = [
     "US", "JP", "IT", "DE", "AT", "RU", "CZ", "FR", "CH", "KR",
     "ES", "CA", "TW", "NL", "GB", "SE", "TH", "ZA", "IN", "TR",
 ]
 
+# Countries discovered via Shodan (regions the curated index misses, incl. the
+# Saudi-Arabia-first priority). Each is resolved to genuinely-rendering feeds.
+SHODAN_COUNTRIES = ["SA", "AE", "KW"]
+
 
 async def aggregate_all(ny_limit: int = 120, caltrans_limit: int = 40,
                         osint_per_country: int = 24,
-                        osint_countries: Optional[List[str]] = None) -> List[Dict]:
+                        osint_countries: Optional[List[str]] = None,
+                        shodan_countries: Optional[List[str]] = None,
+                        shodan_max_ips: int = 120) -> List[Dict]:
     """Aggregate every enabled OSINT source into one normalised, de-duplicated list.
 
-    PRIMARY: real internet-exposed open cameras from the OSINT open-camera index
-    (each with a real public IP:port), geolocated by IP.
+    PRIMARY-A: real internet-exposed open cameras from the OSINT open-camera
+    index (each a real public IP:port), geolocated by IP.
+    PRIMARY-B: Shodan-discovered cameras for regions the index misses (Saudi
+    Arabia first) — resolved to genuinely-rendering open feeds.
     SECONDARY: government DOT live-camera APIs (NY 511, CalTrans).
-    REFERENCE: a single curated Saudi public-broadcast node (seed catalogue).
+    REFERENCE: a single curated Saudi public-broadcast node (Makkah).
     """
     countries = osint_countries or OSINT_COUNTRIES
+    sh_countries = shodan_countries if shodan_countries is not None else SHODAN_COUNTRIES
     all_cameras: List[Dict] = []
 
-    # 1) PRIMARY — real OSINT open cameras worldwide.
+    # 1a) PRIMARY — real OSINT open cameras worldwide (curated index).
     all_cameras.extend(await fetch_osint_cameras(
         countries, per_country=osint_per_country, max_pages=5
     ))
+
+    # 1b) PRIMARY — Shodan-discovered cameras (Saudi-first + Gulf).
+    for cc in sh_countries:
+        try:
+            all_cameras.extend(await fetch_shodan_country(cc, max_ips=shodan_max_ips))
+        except Exception:  # noqa: BLE001
+            continue
 
     # 2) SECONDARY — government DOT live cameras (still real IP cameras).
     all_cameras.extend(await fetch_ny511(limit=ny_limit))

@@ -282,3 +282,47 @@ async def batch_verify_render(targets: List[Dict],
 
     pairs = await asyncio.gather(*[_one(t) for t in targets if t.get("feed_url")])
     return {cid: r for cid, r in pairs}
+
+
+# Candidate open-snapshot / MJPEG paths tried when a discovered IP has no known
+# feed URL. NONE of these submit credentials; they only request the paths that
+# many cameras expose publicly. The first that returns a decodable JPEG wins.
+# Ordered by real-world hit-rate to fail fast.
+_CANDIDATE_PATHS = [
+    "/mjpg/video.mjpg",
+    "/video.mjpg",
+    "/SnapshotJPEG?Resolution=640x480",
+    "/snapshot.cgi",
+    "/tmpfs/auto.jpg",
+    "/cgi-bin/snapshot.cgi",
+    "/axis-cgi/mjpg/video.cgi",
+    "/webcapture.jpg?command=snap&channel=1",
+    "/onvif-http/snapshot",
+]
+
+
+async def find_working_feed(ip: str, ports: List[int],
+                            timeout: float = 3.0) -> Optional[Dict]:
+    """
+    Try candidate snapshot/MJPEG paths across an IP's open web ports and return
+    the first that serves a decodable live JPEG frame. Probes run concurrently
+    per host so a slow/dead path never blocks the others. Returns
+    {"feed_url":..., "port":..., "protocol":...} or None if nothing renders.
+    """
+    web_ports = [p for p in ports if 80 <= p <= 9100] or [80]
+    urls = [(f"http://{ip}:{port}{path}", port, path)
+            for port in web_ports[:2] for path in _CANDIDATE_PATHS]
+
+    async def _try(url, port, path):
+        r = await verify_render(url, timeout=timeout)
+        if r.get("renders"):
+            proto = "MJPEG" if ".mjpg" in path or "video" in path else "HTTP/JPEG"
+            return {"feed_url": url, "port": port, "protocol": proto}
+        return None
+
+    # Fire all candidate probes concurrently; return the first success.
+    results = await asyncio.gather(*[_try(u, p, pa) for u, p, pa in urls])
+    for r in results:
+        if r:
+            return r
+    return None

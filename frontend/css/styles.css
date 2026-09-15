@@ -290,6 +290,16 @@ html, body {
 .ethics-body li { margin: 8px 0; color: var(--text-dim); font-size: 13.5px; line-height: 1.5; }
 .ethics-law { border-left: 3px solid var(--amber); padding-left: 12px; color: var(--amber) !important; }
 
+/* ---------- Region intelligence note ---------- */
+.region-note {
+  margin-bottom: 14px; padding: 14px 18px; border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255,184,0,.08), rgba(15,27,48,.6));
+  border: 1px solid rgba(255,184,0,.35); color: var(--text-dim);
+  font-size: 13px; line-height: 1.55; display: flex; gap: 12px; align-items: flex-start;
+}
+.region-note i { color: var(--amber); font-size: 20px; margin-top: 2px; }
+.region-note b { color: var(--amber); }
+
 /* ---------- Empty state ---------- */
 .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
 .empty-state i { font-size: 48px; color: var(--border-2); margin-bottom: 16px; }

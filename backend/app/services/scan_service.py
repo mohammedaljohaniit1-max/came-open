@@ -26,6 +26,10 @@ _scan_lock = asyncio.Lock()
 
 
 def _merge_probe(camera: Dict, probe: Dict) -> Dict:
+    # Shodan-discovered nodes carry their own authoritative auth-tier
+    # classification (open / default_creds / locked) — preserve it rather than
+    # overwrite with the generic TCP-probe classification.
+    preset_tier = camera.get("source") == "Shodan OSINT Discovery"
     camera.update({
         "alive": probe["alive"],
         "port_status": probe["port_status"],
@@ -33,12 +37,20 @@ def _merge_probe(camera: Dict, probe: Dict) -> Dict:
         "signal_pct": probe["signal_pct"],
         "signal_label": probe["signal_label"],
         "packet_loss_pct": probe["packet_loss_pct"],
-        "http_status": probe.get("http_status"),
-        "security_tier": probe["security_tier"],
-        "security_code": probe["security_code"],
-        "default_creds": probe.get("default_creds", []),
         "last_checked": probe["checked_at"],
     })
+    if not preset_tier:
+        camera.update({
+            "http_status": probe.get("http_status"),
+            "security_tier": probe["security_tier"],
+            "security_code": probe["security_code"],
+            "default_creds": probe.get("default_creds", []),
+        })
+    else:
+        # attach default-cred reference for the detected vendor if any
+        from ..core.knowledge import DEFAULT_CREDENTIALS
+        if camera.get("security_tier") == "default_creds" and not camera.get("default_creds"):
+            camera["default_creds"] = DEFAULT_CREDENTIALS.get("hikvision", [])
     # If the validator fingerprinted a specific *device vendor* from the banner
     # (Hikvision, Dahua, Axis, ...), and our source only had the generic
     # public_webcam tag, upgrade it. We never downgrade a verified public feed

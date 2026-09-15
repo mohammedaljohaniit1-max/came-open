@@ -99,7 +99,29 @@ window.CamApp = (() => {
 
     try { CamGrid.render(cams); } catch (e) { console.error("grid", e); }
     try { CamMap.render(cams, currentCenter()); } catch (e) { console.error("map", e); }
+    updateRegionNote(cams);
     loadStats();
+  }
+
+  // Honest ASM note for regions with ~0 OSINT-exposed open cameras.
+  function updateRegionNote(cams) {
+    const note = $("regionNote");
+    const GULF = ["SA", "AE", "KW"];
+    const osintCount = cams.filter((c) => c.source === "OSINT Open-Camera Index").length;
+    if (GULF.includes(state.country) && osintCount === 0) {
+      const name = (state.countries.find((c) => c.code === state.country) || {}).name || state.country;
+      note.innerHTML = `<i class="fa-solid fa-shield-halved"></i>
+        <div><b>ATTACK-SURFACE FINDING — ${name}:</b> global OSINT open-camera
+        indexes expose <b>0</b> unauthenticated cameras in this region. This
+        reflects a hardened perimeter — regional ISPs (STC, Mobily, Zain) and
+        CITC regulations block direct inbound exposure of camera devices, so they
+        do not appear in public indexes. The node shown below is a verified
+        <b>public broadcast</b> feed (reference only), not an OSINT-exposed device.
+        Switch to <b>Global View</b> to see the live worldwide open-camera surface.</div>`;
+      note.hidden = false;
+    } else {
+      note.hidden = true;
+    }
   }
 
   function currentCenter() {
