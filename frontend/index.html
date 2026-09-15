@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CAMRADAR // Attack Surface Intelligence Platform</title>
+  <meta name="description" content="Real-time OSINT camera aggregator & availability validator. Cybersecurity graduation project." />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- FontAwesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- Leaflet + MarkerCluster -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <!-- MapLibre GL (for keyless CartoDB DarkMatter vector tiles) -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <!-- Scanline + grid overlay -->
+  <div class="fx-scanlines" aria-hidden="true"></div>
+  <div class="fx-grid" aria-hidden="true"></div>
+
+  <!-- ============ TOP BAR ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo"><i class="fa-solid fa-satellite-dish"></i></div>
+      <div class="brand-text">
+        <h1>CAM<span>RADAR</span></h1>
+        <p>Attack Surface Intelligence Platform</p>
+      </div>
+    </div>
+
+    <div class="status-cluster">
+      <div class="status-pill" id="statusEngine">
+        <span class="dot dot-live"></span> ENGINE ONLINE
+      </div>
+      <div class="status-pill">
+        <i class="fa-solid fa-clock"></i> <span id="clock">--:--:--</span> UTC
+      </div>
+      <div class="status-pill">
+        <i class="fa-solid fa-database"></i> NODES: <span id="statNodes">0</span>
+      </div>
+      <div class="status-pill status-alive">
+        <i class="fa-solid fa-signal"></i> LIVE: <span id="statAlive">0</span>
+      </div>
+    </div>
+
+    <button class="btn-ethics" id="openEthics">
+      <i class="fa-solid fa-scale-balanced"></i> LEGAL NOTICE
+    </button>
+  </header>
+
+  <div class="app-shell">
+    <!-- ============ SIDEBAR / CONTROL DECK ============ -->
+    <aside class="sidebar">
+      <div class="panel">
+        <div class="panel-title"><i class="fa-solid fa-earth-asia"></i> TARGET REGION</div>
+        <select id="filterCountry" class="cyber-select"></select>
+        <div class="hint">Saudi Arabia is the default primary target.</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title"><i class="fa-solid fa-video"></i> CAMERA ARCHITECTURE</div>
+        <select id="filterArch" class="cyber-select"></select>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title"><i class="fa-solid fa-shield-halved"></i> ACCESS FILTERS</div>
+        <label class="toggle">
+          <input type="checkbox" id="toggleActive" checked />
+          <span class="slider"></span>
+          <span class="toggle-label">Show only ACTIVE &amp; reachable feeds</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="toggleLocked" checked />
+          <span class="slider"></span>
+          <span class="toggle-label">Exclude LOCKED (401/403) nodes</span>
+        </label>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title"><i class="fa-solid fa-bolt"></i> ENGINE CONTROLS</div>
+        <button class="cyber-btn primary" id="btnScan">
+          <i class="fa-solid fa-radar"></i> RUN SMART PRE-FLIGHT SCAN
+        </button>
+        <button class="cyber-btn" id="btnPing">
+          <i class="fa-solid fa-tower-broadcast"></i> ⚡ FAST PING TEST
+        </button>
+        <div class="hint" id="scanHint">Idle. Press scan to aggregate &amp; validate.</div>
+      </div>
+
+      <div class="panel legend">
+        <div class="panel-title"><i class="fa-solid fa-list"></i> SECURITY LEGEND</div>
+        <div class="legend-row"><span class="chip chip-open"></span> Open Access (no auth)</div>
+        <div class="legend-row"><span class="chip chip-default"></span> Default-Creds Risk</div>
+        <div class="legend-row"><span class="chip chip-locked"></span> Auth Locked (401/403)</div>
+        <div class="legend-row"><span class="chip chip-dead"></span> Offline / Dead</div>
+      </div>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <main class="main">
+      <!-- KPI ROW -->
+      <section class="kpi-row" id="kpiRow">
+        <div class="kpi"><div class="kpi-label">TOTAL NODES</div><div class="kpi-val" id="kpiTotal">0</div><i class="fa-solid fa-server kpi-ic"></i></div>
+        <div class="kpi kpi-green"><div class="kpi-label">LIVE / REACHABLE</div><div class="kpi-val" id="kpiAlive">0</div><i class="fa-solid fa-wifi kpi-ic"></i></div>
+        <div class="kpi kpi-amber"><div class="kpi-label">DEFAULT-CREDS RISK</div><div class="kpi-val" id="kpiRisk">0</div><i class="fa-solid fa-triangle-exclamation kpi-ic"></i></div>
+        <div class="kpi kpi-red"><div class="kpi-label">AUTH LOCKED</div><div class="kpi-val" id="kpiLocked">0</div><i class="fa-solid fa-lock kpi-ic"></i></div>
+        <div class="kpi kpi-cyan"><div class="kpi-label">AVG LATENCY</div><div class="kpi-val" id="kpiLatency">--</div><i class="fa-solid fa-gauge-high kpi-ic"></i></div>
+      </section>
+
+      <!-- TABS -->
+      <nav class="tabs">
+        <button class="tab active" data-tab="wall"><i class="fa-solid fa-table-cells-large"></i> MULTI-VIEW WALL</button>
+        <button class="tab" data-tab="map"><i class="fa-solid fa-map-location-dot"></i> GEO MAP</button>
+        <button class="tab" data-tab="analytics"><i class="fa-solid fa-chart-pie"></i> ANALYTICS</button>
+      </nav>
+
+      <!-- WALL -->
+      <section class="tab-panel active" id="panel-wall">
+        <div class="wall-toolbar">
+          <span class="wall-title"><i class="fa-solid fa-tower-observation"></i> LIVE SURVEILLANCE WALL</span>
+          <span class="wall-note">Round-robin snapshot streaming (bypasses HTTP/1.1 6-connection limit)</span>
+        </div>
+        <div class="cam-grid" id="camGrid"></div>
+        <div class="empty-state" id="wallEmpty" hidden>
+          <i class="fa-solid fa-satellite-dish"></i>
+          <p>No live nodes yet. Run the <b>Smart Pre-Flight Scan</b>.</p>
+        </div>
+      </section>
+
+      <!-- MAP -->
+      <section class="tab-panel" id="panel-map">
+        <div id="map"></div>
+      </section>
+
+      <!-- ANALYTICS -->
+      <section class="tab-panel" id="panel-analytics">
+        <div class="charts-grid">
+          <div class="chart-card"><h3><i class="fa-solid fa-microchip"></i> Vendor Distribution</h3><canvas id="chartVendor"></canvas></div>
+          <div class="chart-card"><h3><i class="fa-solid fa-plug"></i> Most Exposed Ports</h3><canvas id="chartPort"></canvas></div>
+          <div class="chart-card"><h3><i class="fa-solid fa-shield-virus"></i> Security Posture</h3><canvas id="chartTier"></canvas></div>
+          <div class="chart-card"><h3><i class="fa-solid fa-diagram-project"></i> Protocol Spread</h3><canvas id="chartProto"></canvas></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ============ INSPECT HUD MODAL ============ -->
+  <div class="modal-overlay" id="inspectModal" hidden>
+    <div class="modal">
+      <button class="modal-close" id="inspectClose"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal-header">
+        <i class="fa-solid fa-magnifying-glass-chart"></i>
+        <span id="inspectTitle">NODE INSPECTOR</span>
+        <span class="tier-badge" id="inspectTier">--</span>
+      </div>
+      <div class="modal-body">
+        <div class="modal-stream" id="inspectStream"></div>
+        <div class="modal-telemetry">
+          <div class="tele-grid" id="inspectTele"></div>
+          <div class="shodan-box">
+            <div class="shodan-head"><i class="fa-solid fa-network-wired"></i> SHODAN HOST ENRICHMENT</div>
+            <div id="inspectShodan" class="shodan-body">Querying /shodan/host/{ip} ...</div>
+          </div>
+          <div class="creds-box" id="inspectCreds" hidden>
+            <div class="creds-head"><i class="fa-solid fa-key"></i> DOCUMENTED DEFAULT CREDENTIALS (AUDIT REFERENCE)</div>
+            <div id="inspectCredsBody" class="creds-body"></div>
+            <div class="creds-warn">Reference intelligence only — CAMRADAR never submits credentials to third-party devices.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ETHICS MODAL ============ -->
+  <div class="modal-overlay" id="ethicsModal" hidden>
+    <div class="modal modal-narrow">
+      <button class="modal-close" id="ethicsClose"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal-header"><i class="fa-solid fa-scale-balanced"></i> ETHICAL &amp; LEGAL NOTICE</div>
+      <div class="modal-body ethics-body">
+        <p><b>CAMRADAR</b> is an academic <b>Cybersecurity graduation project</b> built for education,
+        threat-intelligence research and <b>Attack Surface Management (ASM)</b>.</p>
+        <ul>
+          <li>It aggregates only <b>legitimately public</b> OSINT feeds (government open-CCTV data, public webcams) and verifies their live availability.</li>
+          <li>It performs <b>passive reachability probes and banner reads</b> only. It never brute-forces, never submits credentials, and never accesses private third-party devices.</li>
+          <li>The default-credential database is a <b>vulnerability-signature reference</b> for exposure analysis, equivalent to a CVE catalogue.</li>
+          <li>Locked devices (HTTP 401/403) are shown as <b>protected</b> — no video is ever fabricated for them.</li>
+        </ul>
+        <p class="ethics-law"><i class="fa-solid fa-gavel"></i> Users must comply with the Saudi <b>Anti-Cyber Crime Law</b>
+        (نظام مكافحة الجرائم المعلوماتية) and all applicable local regulations. Unauthorized access to
+        computer systems is strictly prohibited.</p>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <span>CAMRADAR v1.0 // OSINT Aggregator &amp; Availability Validator</span>
+    <span>For educational &amp; authorized security research only · Compliant with Saudi Anti-Cyber Crime Law</span>
+  </footer>
+
+  <!-- Libraries -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+
+  <!-- App modules -->
+  <script src="/js/api.js"></script>
+  <script src="/js/charts.js"></script>
+  <script src="/js/map.js"></script>
+  <script src="/js/grid.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
