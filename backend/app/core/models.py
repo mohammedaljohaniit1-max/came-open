@@ -85,6 +85,7 @@ class ScanRequest(BaseModel):
     architecture: str = "all"
     only_active: bool = True
     exclude_locked: bool = True
+    require_render: bool = True
     limit: int = 60
 
 

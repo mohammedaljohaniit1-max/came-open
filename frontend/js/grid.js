@@ -50,17 +50,21 @@ const CamGrid = (() => {
   function cellHtml(cam) {
     const tier = cam.security_tier;
     const tagTxt = { open: "OPEN", default_creds: "DEFAULT", locked: "LOCKED", dead: "DEAD" }[tier] || "—";
-    const locked = tier === "locked";
+    // A node renders live only if it's OPEN with a real feed URL (or an HLS node).
+    const hasFeed = (cam.snapshot_url || cam.feed_url || cam.stream_url) && tier === "open";
     const sig = cam.signal_label || "NO SIGNAL";
     const loc = (cam.city ? cam.city + ", " : "") + (cam.country_code || "");
+    let overlay = "";
+    if (tier === "locked") overlay = lockedOverlay(cam);
+    else if (!hasFeed && tier === "default_creds") overlay = defaultCredOverlay(cam);
     return `
       <div class="cam-cell tier-${tier}" data-id="${cam.id}" title="${cam.ip}:${cam.port}">
         <div class="cam-tag ${tier}">${tagTxt}</div>
-        ${!locked ? `<div class="cam-live"><span class="dot"></span>LIVE</div>` : ""}
+        ${hasFeed ? `<div class="cam-live"><span class="dot"></span>LIVE</div>` : ""}
         <div class="cam-ip">${cam.ip}:${cam.port}</div>
-        <div class="cam-loading">ACQUIRING FEED…</div>
+        ${hasFeed ? `<div class="cam-loading">ACQUIRING FEED…</div>` : ""}
         <div class="cam-media" data-media></div>
-        ${locked ? lockedOverlay(cam) : ""}
+        ${overlay}
         <div class="cam-meta">
           <div class="cm-name"><i class="fa-solid fa-location-dot"></i> ${loc || "Unknown"}</div>
           <div class="cm-sub">
@@ -72,17 +76,29 @@ const CamGrid = (() => {
       </div>`;
   }
 
+  function defaultCredOverlay(cam) {
+    return `<div class="cam-locked-overlay" style="background:repeating-linear-gradient(45deg,#1a1405,#1a1405 10px,#211a06 10px,#211a06 20px);color:#ffb800">
+      <div><i class="fa-solid fa-triangle-exclamation"></i>
+      <div class="code">WEB UI REACHABLE · HTTP ${cam.http_status || 200}</div>
+      <div class="code" style="opacity:.8;margin-top:4px">DEFAULT-CRED EXPOSURE · ${cam.ip}:${cam.port}</div>
+      <div class="code" style="opacity:.6;font-size:9px;margin-top:6px">Inspect for audit — CAMRADAR does not authenticate</div></div>
+    </div>`;
+  }
+
   function lockedOverlay(cam) {
     return `<div class="cam-locked-overlay">
       <div><i class="fa-solid fa-lock"></i>
-      <div class="code">HTTP ${cam.http_status || 401} · PROTECTED STREAM</div></div>
+      <div class="code">HTTP ${cam.http_status || 401} · PROTECTED STREAM</div>
+      <div class="code" style="opacity:.7;margin-top:4px">${cam.ip}:${cam.port}</div></div>
     </div>`;
   }
 
   function mountMedia(cam) {
     const cell = document.querySelector(`.cam-cell[data-id="${cam.id}"] [data-media]`);
     if (!cell) return;
+    // Only OPEN nodes stream media; locked/default-cred nodes show an overlay.
     if (cam.security_tier === "locked") return;
+    if (cam.security_tier === "default_creds" && !cam.stream_url) return;
 
     // HLS live stream
     if (cam.stream_url && cam.stream_url.includes(".m3u8")) {

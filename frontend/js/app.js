@@ -58,11 +58,16 @@ window.CamApp = (() => {
         : "Loading cached intelligence…";
       if (rescan) { btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> SCANNING…`; }
 
+      // For Gulf/SA regions, surface all discovered nodes (open + default-cred +
+      // locked) so the real attack surface is visible; elsewhere require a
+      // render-verified live feed so the wall never shows a dead cell.
+      const gulf = ["SA", "AE", "KW"].includes(state.country);
       const payload = {
         country_code: state.country,
         architecture: state.arch,
         only_active: state.onlyActive,
         exclude_locked: state.excludeLocked,
+        require_render: gulf ? false : true,
         limit: 60,
       };
       const data = rescan ? await API.scan(payload) : await API.cameras(payload);
@@ -103,24 +108,44 @@ window.CamApp = (() => {
     loadStats();
   }
 
-  // Honest ASM note for regions with ~0 OSINT-exposed open cameras.
-  function updateRegionNote(cams) {
+  // Real Shodan exposure report for Gulf/SA regions.
+  async function updateRegionNote(cams) {
     const note = $("regionNote");
     const GULF = ["SA", "AE", "KW"];
-    const osintCount = cams.filter((c) => c.source === "OSINT Open-Camera Index").length;
-    if (GULF.includes(state.country) && osintCount === 0) {
-      const name = (state.countries.find((c) => c.code === state.country) || {}).name || state.country;
-      note.innerHTML = `<i class="fa-solid fa-shield-halved"></i>
-        <div><b>ATTACK-SURFACE FINDING — ${name}:</b> global OSINT open-camera
-        indexes expose <b>0</b> unauthenticated cameras in this region. This
-        reflects a hardened perimeter — regional ISPs (STC, Mobily, Zain) and
-        CITC regulations block direct inbound exposure of camera devices, so they
-        do not appear in public indexes. The node shown below is a verified
-        <b>public broadcast</b> feed (reference only), not an OSINT-exposed device.
-        Switch to <b>Global View</b> to see the live worldwide open-camera surface.</div>`;
-      note.hidden = false;
-    } else {
-      note.hidden = true;
+    if (!GULF.includes(state.country)) { note.hidden = true; return; }
+    const name = (state.countries.find((c) => c.code === state.country) || {}).name || state.country;
+    note.hidden = false;
+    note.innerHTML = `<i class="fa-solid fa-satellite-dish"></i>
+      <div><b>${name} — LIVE ATTACK-SURFACE REPORT (Shodan OSINT):</b>
+      <span id="expLoading">querying exposed-camera intelligence…</span></div>`;
+    try {
+      const e = await API.exposure(state.country);
+      if (e.error || !e.total) {
+        const el = note.querySelector("#expLoading");
+        if (el) el.textContent = "exposure data unavailable right now.";
+        return;
+      }
+      const disc = cams.filter((c) => c.source === "Shodan OSINT Discovery");
+      const open = disc.filter((c) => c.security_tier === "open").length;
+      const weak = disc.filter((c) => c.security_tier === "default_creds").length;
+      const locked = disc.filter((c) => c.security_tier === "locked").length;
+      const prod = (e.by_product || []).slice(0, 3).map((p) => `${p.value} (${p.count})`).join(", ");
+      const ports = (e.by_port || []).slice(0, 4).map((p) => `${p.value}:${p.count}`).join("  ");
+      note.innerHTML = `<i class="fa-solid fa-satellite-dish"></i>
+        <div>
+          <b>${name} — LIVE ATTACK-SURFACE REPORT (Shodan OSINT)</b><br>
+          <b style="color:#00f0ff">${e.total.toLocaleString()}</b> internet-exposed camera devices indexed ·
+          top devices: ${prod || "—"}<br>
+          <span style="font-family:'Share Tech Mono';font-size:11.5px">exposed ports → ${ports}</span><br>
+          CAMRADAR discovered <b>${disc.length}</b> reachable nodes here →
+          <span style="color:#00ff88">${open} open</span> ·
+          <span style="color:#ffb800">${weak} default-cred risk</span> ·
+          <span style="color:#ff3b5c">${locked} auth-locked</span>.
+          ${(locked || weak) ? `Disable <b>“Exclude LOCKED”</b> to inspect protected nodes (shown as real IP + 401, never logged into).` : ""}
+        </div>`;
+    } catch (err) {
+      const el = note.querySelector("#expLoading");
+      if (el) el.textContent = "exposure query failed.";
     }
   }
 

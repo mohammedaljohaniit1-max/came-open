@@ -52,7 +52,7 @@ async def scan(req: ScanRequest):
         vendor=req.architecture,
         only_active=req.only_active,
         exclude_locked=req.exclude_locked,
-        require_render=True,
+        require_render=req.require_render,
         limit=req.limit,
     )
     return {"count": len(cams), "cameras": cams}

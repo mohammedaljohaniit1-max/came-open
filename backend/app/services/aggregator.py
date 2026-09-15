@@ -401,11 +401,11 @@ OSINT_COUNTRIES = [
 SHODAN_COUNTRIES = ["SA", "AE", "KW"]
 
 
-async def aggregate_all(ny_limit: int = 120, caltrans_limit: int = 40,
-                        osint_per_country: int = 24,
+async def aggregate_all(ny_limit: int = 100, caltrans_limit: int = 30,
+                        osint_per_country: int = 18,
                         osint_countries: Optional[List[str]] = None,
                         shodan_countries: Optional[List[str]] = None,
-                        shodan_max_ips: int = 120) -> List[Dict]:
+                        shodan_max_ips: int = 60) -> List[Dict]:
     """Aggregate every enabled OSINT source into one normalised, de-duplicated list.
 
     PRIMARY-A: real internet-exposed open cameras from the OSINT open-camera
@@ -424,12 +424,17 @@ async def aggregate_all(ny_limit: int = 120, caltrans_limit: int = 40,
         countries, per_country=osint_per_country, max_pages=5
     ))
 
-    # 1b) PRIMARY — Shodan-discovered cameras (Saudi-first + Gulf).
-    for cc in sh_countries:
+    # 1b) PRIMARY — Shodan-discovered cameras (Saudi-first + Gulf), in parallel.
+    import asyncio as _aio
+
+    async def _safe_shodan(cc):
         try:
-            all_cameras.extend(await fetch_shodan_country(cc, max_ips=shodan_max_ips))
+            return await fetch_shodan_country(cc, max_ips=shodan_max_ips)
         except Exception:  # noqa: BLE001
-            continue
+            return []
+
+    for chunk in await _aio.gather(*[_safe_shodan(cc) for cc in sh_countries]):
+        all_cameras.extend(chunk)
 
     # 2) SECONDARY — government DOT live cameras (still real IP cameras).
     all_cameras.extend(await fetch_ny511(limit=ny_limit))
