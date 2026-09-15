@@ -242,11 +242,22 @@ window.CamApp = (() => {
         fresh.onload = () => { img.src = fresh.src; };
         fresh.src = API.snapshotUrl(feed) + "&t=" + Date.now();
       }, 1500);
+    } else if (cam.security_tier === "default_creds") {
+      streamBox.innerHTML = `<div style="color:#ffb800;text-align:center;font-family:'Share Tech Mono'">
+        <i class="fa-solid fa-triangle-exclamation" style="font-size:40px"></i>
+        <p style="margin-top:10px">WEB UI REACHABLE · HTTP ${cam.http_status || 200}</p>
+        <p style="font-size:11px;opacity:.7;margin-top:6px">Default-credential exposure candidate.<br>
+        CAMRADAR does not authenticate — audit reference only.</p>
+        <a href="http://${cam.ip}:${cam.port}/" target="_blank" rel="noopener"
+           style="display:inline-block;margin-top:10px;color:#00f0ff;font-size:11px">
+           open device UI in new tab ↗</a></div>`;
     } else {
       streamBox.innerHTML = `<div style="color:#6b8299">No renderable feed for this node.</div>`;
     }
 
     // Telemetry
+    const shodanPorts = (cam.shodan_ports || []).join(", ");
+    const shodanVulns = (cam.shodan_vulns || []);
     $("inspectTele").innerHTML = [
       ["IP / PORT", `${cam.ip}:${cam.port}`],
       ["PORT STATUS", cam.port_status],
@@ -257,7 +268,11 @@ window.CamApp = (() => {
       ["VENDOR", cam.vendor_label],
       ["PROTOCOL", cam.protocol],
       ["ISP", cam.isp || "—"],
+      ["ASN", cam.asn || "—"],
+      ["OPEN PORTS", shodanPorts || "—"],
+      ["KNOWN CVES", shodanVulns.length ? shodanVulns.slice(0, 4).join(", ") : "none"],
       ["SOURCE", cam.source],
+      ["GEO", `${cam.city || "—"} (${cam.country_code || "—"})`],
     ].map(([k, v]) => `<div class="tele-item"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
 
     // Default creds reference
