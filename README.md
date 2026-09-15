@@ -27,7 +27,8 @@ ISP/ASN, and a render-verified live frame. Nothing is faked, mocked, or padded.
 | ⚡ **Pre-flight validator** | Real async TCP handshake: measured **RTT**, port status (OPEN/FILTERED/CLOSED), signal quality %, packet loss %, HTTP banner grab & vendor fingerprint. |
 | 🗺️ **Precise geo map** | Keyless **CartoDB DarkMatter** vector tiles (no CSS filters), MarkerCluster, security-coloured markers placed by real per-IP geolocation. |
 | 📊 **Analytics** | Vendor distribution, most-exposed ports, security posture, protocol spread (Chart.js). |
-| 🔎 **Inspect HUD** | Per-node live feed + full telemetry + real open ports, **known CVEs**, ISP/ASN, geolocation, and Shodan host enrichment. |
+| 🐛 **CVE Exploitability Analyzer** | Fingerprints each device and cross-references a curated **camera-CVE knowledge base** (Hikvision auth-bypass CVE-2017-7921, RCE CVE-2021-36260, Dahua auth-bypass/backdoors, XiongMai RCE…) plus Shodan-reported CVEs, producing a **CRITICAL/HIGH/MEDIUM/LOW** risk score with remediation. |
+| 🔎 **Inspect HUD** | Per-node live feed + full telemetry + real open ports, **known CVEs**, ISP/ASN, geolocation, exploitability assessment, and Shodan host enrichment. |
 
 ---
 
@@ -46,6 +47,17 @@ CAMRADAR performs **passive reconnaissance of the already-public attack surface*
 Users must comply with the Saudi **Anti-Cyber Crime Law**
 (نظام مكافحة الجرائم المعلوماتية) and all applicable local regulations.
 Unauthorized access to computer systems is a crime.
+
+### On "cracking passwords" — the professional stance
+CAMRADAR deliberately does **not** brute-force or recover camera passwords —
+that is unauthorized access (a crime) and every serious cybersecurity committee
+rejects it. Brute-forcing is also technically the *weakest* approach. Real red
+teams and ASM platforms instead **fingerprint the device and report known
+exploitable vulnerabilities**. Many camera CVEs are **authentication bypasses or
+backdoors that make the password irrelevant** (e.g. Hikvision CVE-2017-7921,
+Dahua CVE-2018-9995). CAMRADAR detects and *reports* these — exactly like Nessus,
+OpenVAS, or Shodan — so the asset owner can remediate. That is the legal,
+high-impact, committee-winning capability.
 
 ---
 
