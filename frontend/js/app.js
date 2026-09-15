@@ -275,6 +275,29 @@ window.CamApp = (() => {
       ["GEO", `${cam.city || "—"} (${cam.country_code || "—"})`],
     ].map(([k, v]) => `<div class="tele-item"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
 
+    // Exploitability (CVE) assessment
+    const cveBox = $("inspectCve");
+    const findings = cam.cve_findings || [];
+    if (cam.risk_level && (findings.length || cam.risk_level !== "LOW")) {
+      cveBox.hidden = false;
+      const rp = $("inspectRisk");
+      rp.className = "risk-pill risk-" + cam.risk_level;
+      rp.textContent = `${cam.risk_level} · ${cam.risk_score}`;
+      const sevColor = { CRITICAL: "#ff3b5c", HIGH: "#ff7a3c", MEDIUM: "#ffb800", LOW: "#6b8299" };
+      $("inspectCveBody").innerHTML = findings.length
+        ? findings.slice(0, 6).map((f) => `
+            <div class="cve-item ${f.confidence}">
+              <div><span class="cid">${f.id}</span>
+                <span class="csev" style="background:${sevColor[f.severity] || "#6b8299"};color:#0a0a0a">${f.severity}${f.cvss ? " " + f.cvss : ""}</span>
+                <span class="cve-conf">${f.confidence}</span></div>
+              <div class="cmeta"><b>${f.class}</b> — ${f.desc}</div>
+              <div class="cfix"><i class="fa-solid fa-wrench"></i> ${f.remediation}</div>
+            </div>`).join("")
+        : `<div style="color:#8aa6bd;font-size:12px">No known CVEs matched. Risk driven by exposure posture (${cam.security_code}).</div>`;
+    } else {
+      cveBox.hidden = true;
+    }
+
     // Default creds reference
     const credsBox = $("inspectCreds");
     if (cam.default_creds && cam.default_creds.length) {

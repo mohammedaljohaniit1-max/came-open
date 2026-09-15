@@ -61,6 +61,7 @@ const CamGrid = (() => {
       <div class="cam-cell tier-${tier}" data-id="${cam.id}" title="${cam.ip}:${cam.port}">
         <div class="cam-tag ${tier}">${tagTxt}</div>
         ${hasFeed ? `<div class="cam-live"><span class="dot"></span>LIVE</div>` : ""}
+        ${cam.risk_level && cam.risk_level !== "LOW" ? `<div class="cam-risk risk-${cam.risk_level}">${cam.cve_count ? cam.cve_count + " CVE" : cam.risk_level}</div>` : ""}
         <div class="cam-ip">${cam.ip}:${cam.port}</div>
         ${hasFeed ? `<div class="cam-loading">ACQUIRING FEED…</div>` : ""}
         <div class="cam-media" data-media></div>

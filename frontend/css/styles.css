@@ -218,6 +218,13 @@ html, body {
   background: rgba(0,0,0,.72); color: var(--cyan); font-family: 'Share Tech Mono';
   font-size: 10.5px; letter-spacing: .3px; border: 1px solid rgba(0,240,255,.35);
 }
+.cam-risk {
+  position: absolute; top: 30px; right: 6px; z-index: 3; padding: 2px 7px; border-radius: 4px;
+  font-family: 'Share Tech Mono'; font-size: 10px; font-weight: 700; letter-spacing: .3px;
+}
+.cam-risk.risk-CRITICAL { background: var(--red); color: #fff; }
+.cam-risk.risk-HIGH { background: #ff7a3c; color: #150a04; }
+.cam-risk.risk-MEDIUM { background: var(--amber); color: #150f02; }
 .cam-live .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); animation: blink 1.2s infinite; }
 
 .cam-meta {
@@ -274,7 +281,21 @@ html, body {
 .tele-item { background: #08101f; border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px; }
 .tele-item .k { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
 .tele-item .v { font-family: 'Share Tech Mono'; font-size: 14px; color: var(--text); margin-top: 3px; }
-.shodan-box, .creds-box { background: #08101f; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+.shodan-box, .creds-box, .cve-box { background: #08101f; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+.cve-box { border-color: rgba(255,59,92,.35); }
+.cve-head { font-family: 'Orbitron'; font-size: 11px; color: var(--red); letter-spacing: 1px; margin-bottom: 10px; display:flex; align-items:center; gap:8px; }
+.risk-pill { margin-left: auto; padding: 3px 10px; border-radius: 5px; font-size: 11px; font-family:'Share Tech Mono'; }
+.risk-CRITICAL { background: var(--red); color:#fff; }
+.risk-HIGH { background: #ff7a3c; color:#150a04; }
+.risk-MEDIUM { background: var(--amber); color:#150f02; }
+.risk-LOW { background: var(--muted); color:#050a12; }
+.cve-item { border-left: 3px solid var(--red); padding: 7px 10px; margin: 8px 0; background: rgba(255,59,92,.06); border-radius: 0 6px 6px 0; }
+.cve-item.potential { border-left-color: var(--amber); background: rgba(255,184,0,.06); }
+.cve-item .cid { font-family:'Share Tech Mono'; font-size: 12.5px; color: var(--cyan); font-weight: 700; }
+.cve-item .csev { font-size: 10px; padding: 1px 6px; border-radius: 3px; margin-left: 6px; font-family:'Share Tech Mono'; }
+.cve-item .cmeta { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+.cve-item .cfix { font-size: 10.5px; color: var(--green); margin-top: 3px; }
+.cve-conf { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; opacity: .7; }
 .shodan-head, .creds-head { font-family: 'Orbitron'; font-size: 11px; color: var(--cyan); letter-spacing: 1px; margin-bottom: 8px; }
 .shodan-body { font-family: 'Share Tech Mono'; font-size: 12px; color: var(--text-dim); line-height: 1.6; word-break: break-word; }
 .creds-head { color: var(--amber); }

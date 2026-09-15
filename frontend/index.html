@@ -172,6 +172,14 @@
         <div class="modal-stream" id="inspectStream"></div>
         <div class="modal-telemetry">
           <div class="tele-grid" id="inspectTele"></div>
+          <div class="cve-box" id="inspectCve" hidden>
+            <div class="cve-head">
+              <i class="fa-solid fa-bug"></i> EXPLOITABILITY ASSESSMENT
+              <span class="risk-pill" id="inspectRisk">--</span>
+            </div>
+            <div id="inspectCveBody" class="cve-body"></div>
+            <div class="creds-warn">Detection &amp; reporting only (like a vulnerability scanner). CAMRADAR does not exploit devices or crack passwords.</div>
+          </div>
           <div class="shodan-box">
             <div class="shodan-head"><i class="fa-solid fa-network-wired"></i> SHODAN HOST ENRICHMENT</div>
             <div id="inspectShodan" class="shodan-body">Querying /shodan/host/{ip} ...</div>

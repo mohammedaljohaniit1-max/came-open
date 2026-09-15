@@ -65,10 +65,12 @@ async def fetch_osint_cameras(country_codes: List[str], per_country: int = 40,
 
     ips = list({r["ip"] for r in raw})
     geo = await geoip.geolocate(ips)
+    idb_map = await shodan_discovery.enrich_ports(ips)  # keyless InternetDB (ports+CVEs)
 
     out: List[Dict] = []
     for r in raw:
         g = geo.get(r["ip"], {})
+        idb = idb_map.get(r["ip"], {})
         vendor = _vendor_from_feed(r["feed_url"])
         arch = ARCHITECTURE_BY_ID.get(vendor, ARCHITECTURE_BY_ID["public_webcam"])
         cid = _stable_id("osint", r["ip"], r["port"], r["feed_url"])
@@ -92,6 +94,8 @@ async def fetch_osint_cameras(country_codes: List[str], per_country: int = 40,
             "stream_url": None,
             "snapshot_url": r["feed_url"],
             "feed_url": r["feed_url"],
+            "shodan_vulns": idb.get("vulns", []) or [],
+            "shodan_ports": idb.get("ports", []) or [],
             "meta_name": f"{g.get('city') or 'Camera'} · {r['ip']}",
         })
     return out

@@ -44,6 +44,12 @@ CREATE TABLE IF NOT EXISTS cameras (
     security_tier TEXT DEFAULT 'dead',
     security_code TEXT DEFAULT 'OFFLINE',
     default_creds TEXT DEFAULT '[]',
+    risk_level    TEXT DEFAULT 'LOW',
+    risk_score    INTEGER DEFAULT 0,
+    cve_count     INTEGER DEFAULT 0,
+    cve_findings  TEXT DEFAULT '[]',
+    shodan_vulns  TEXT DEFAULT '[]',
+    shodan_ports  TEXT DEFAULT '[]',
     last_checked  TEXT
 );
 
@@ -61,7 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_cameras_vendor ON cameras(vendor);
 CREATE INDEX IF NOT EXISTS idx_cameras_tier ON cameras(security_tier);
 """
 
-_LIST_COLUMNS = {"default_creds"}
+_LIST_COLUMNS = {"default_creds", "cve_findings", "shodan_vulns", "shodan_ports"}
 
 
 def _row_to_dict(row: aiosqlite.Row) -> Dict:
@@ -95,13 +101,17 @@ async def upsert_cameras(cameras: List[Dict]) -> None:
                     latitude, longitude, vendor, vendor_label, protocol, source,
                     stream_url, snapshot_url, feed_url, alive, renders, port_status,
                     rtt_ms, signal_pct, signal_label, packet_loss_pct, http_status,
-                    security_tier, security_code, default_creds, last_checked
+                    security_tier, security_code, default_creds,
+                    risk_level, risk_score, cve_count, cve_findings,
+                    shodan_vulns, shodan_ports, last_checked
                 ) VALUES (
                     :id, :ip, :port, :country, :country_code, :city, :isp, :org, :asn,
                     :latitude, :longitude, :vendor, :vendor_label, :protocol, :source,
                     :stream_url, :snapshot_url, :feed_url, :alive, :renders, :port_status,
                     :rtt_ms, :signal_pct, :signal_label, :packet_loss_pct, :http_status,
-                    :security_tier, :security_code, :default_creds, :last_checked
+                    :security_tier, :security_code, :default_creds,
+                    :risk_level, :risk_score, :cve_count, :cve_findings,
+                    :shodan_vulns, :shodan_ports, :last_checked
                 )
                 ON CONFLICT(id) DO UPDATE SET
                     alive=excluded.alive, renders=excluded.renders,
@@ -112,6 +122,9 @@ async def upsert_cameras(cameras: List[Dict]) -> None:
                     http_status=excluded.http_status,
                     security_tier=excluded.security_tier,
                     security_code=excluded.security_code,
+                    risk_level=excluded.risk_level, risk_score=excluded.risk_score,
+                    cve_count=excluded.cve_count, cve_findings=excluded.cve_findings,
+                    shodan_vulns=excluded.shodan_vulns, shodan_ports=excluded.shodan_ports,
                     isp=COALESCE(excluded.isp, cameras.isp),
                     org=COALESCE(excluded.org, cameras.org),
                     asn=COALESCE(excluded.asn, cameras.asn),
@@ -121,10 +134,14 @@ async def upsert_cameras(cameras: List[Dict]) -> None:
                     "stream_url": None, "snapshot_url": None, "feed_url": None,
                     "renders": 0, "asn": None, "isp": None, "org": None, "city": None,
                     "latitude": None, "longitude": None,
+                    "risk_level": "LOW", "risk_score": 0, "cve_count": 0,
                     **c,
                     "alive": int(bool(c.get("alive"))),
                     "renders": int(bool(c.get("renders"))),
                     "default_creds": json.dumps(c.get("default_creds", [])),
+                    "cve_findings": json.dumps(c.get("cve_findings", [])),
+                    "shodan_vulns": json.dumps(c.get("shodan_vulns", [])),
+                    "shodan_ports": json.dumps(c.get("shodan_ports", [])),
                 },
             )
         await db.commit()
@@ -154,7 +171,7 @@ async def get_cameras(
         # Only feeds that actually produced a live frame, OR HLS/broadcast nodes
         # (verified separately by the player) — never dead/no-signal cells.
         query += " AND (renders = 1 OR stream_url IS NOT NULL)"
-    query += " ORDER BY renders DESC, alive DESC, signal_pct DESC LIMIT ?"
+    query += " ORDER BY renders DESC, risk_score DESC, alive DESC, signal_pct DESC LIMIT ?"
     params.append(limit)
 
     async with aiosqlite.connect(settings.DB_PATH) as db:

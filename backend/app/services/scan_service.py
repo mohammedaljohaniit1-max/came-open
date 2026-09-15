@@ -119,6 +119,20 @@ async def run_scan(
                 # HLS/broadcast nodes have no snapshot to pre-render.
                 c["renders"] = bool(c.get("stream_url"))
 
+        # Stage 3 — CVE EXPLOITABILITY ASSESSMENT (detection & reporting only).
+        from ..core.cve_kb import assess_risk
+        for c in enriched:
+            risk = assess_risk(
+                vendor=c.get("vendor"),
+                reported_vulns=c.get("shodan_vulns", []),
+                ports=c.get("shodan_ports", []) or [c.get("port")],
+                security_tier=c.get("security_tier", "dead"),
+            )
+            c["risk_level"] = risk["risk_level"]
+            c["risk_score"] = risk["risk_score"]
+            c["cve_count"] = risk["cve_count"]
+            c["cve_findings"] = risk["findings"]
+
         if persist:
             await db.upsert_cameras(enriched)
         return enriched
