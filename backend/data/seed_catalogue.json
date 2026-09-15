@@ -1,0 +1,19 @@
+[
+  {
+    "name": "Al-Masjid Al-Haram Live (Makkah) — Public Broadcast Reference",
+    "ip": "win.holol.com",
+    "port": 443,
+    "country": "Saudi Arabia",
+    "country_code": "SA",
+    "city": "Makkah",
+    "isp": "STC (Saudi Telecom Company)",
+    "org": "Holol / Saudi Public Broadcast",
+    "asn": "AS39386",
+    "latitude": 21.4225,
+    "longitude": 39.8262,
+    "vendor": "public_webcam",
+    "protocol": "HLS",
+    "source": "Saudi Public Live Feed",
+    "stream_url": "https://win.holol.com/live/quran/playlist.m3u8"
+  }
+]
